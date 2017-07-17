@@ -31,53 +31,58 @@ static bool path_set = false;
 int
 oc_storage_config(const char *store)
 {
-  store_path_len = strlen(store);
-  if (store_path_len >= STORE_PATH_SIZE)
-    return -ENOENT;
+    store_path_len = strlen(store);
+    if (store_path_len >= STORE_PATH_SIZE) {
+        return -ENOENT;
+    }
 
-  strncpy(store_path, store, store_path_len);
-  path_set = true;
+    strncpy(store_path, store, store_path_len);
+    path_set = true;
 
-  return 0;
+    return 0;
 }
 
 long
 oc_storage_read(const char *store, uint8_t *buf, size_t size)
 {
-  FILE *fp = 0;
-  size_t store_len = strlen(store);
+    FILE *fp = 0;
+    size_t store_len = strlen(store);
 
-  if (!path_set || (store_len + store_path_len >= STORE_PATH_SIZE))
-    return -ENOENT;
+    if (!path_set || (store_len + store_path_len >= STORE_PATH_SIZE)) {
+        return -ENOENT;
+    }
 
-  strncpy(store_path + store_path_len, store, store_len);
-  store_path[store_path_len + store_len] = '\0';
-  fp = fopen(store_path, "rb");
-  if (!fp)
-    return -EINVAL;
+    strncpy(store_path + store_path_len, store, store_len);
+    store_path[store_path_len + store_len] = '\0';
+    fp = fopen(store_path, "rb");
+    if (!fp) {
+        return -EINVAL;
+    }
 
-  size = fread(buf, 1, size, fp);
-  fclose(fp);
-  return size;
+    size = fread(buf, 1, size, fp);
+    fclose(fp);
+    return size;
 }
 
 long
 oc_storage_write(const char *store, uint8_t *buf, size_t size)
 {
-  FILE *fp;
-  size_t store_len = strlen(store);
+    FILE *fp;
+    size_t store_len = strlen(store);
 
-  if (!path_set || (store_len + store_path_len >= STORE_PATH_SIZE))
-    return -ENOENT;
+    if (!path_set || (store_len + store_path_len >= STORE_PATH_SIZE)) {
+        return -ENOENT;
+    }
 
-  strncpy(store_path + store_path_len, store, store_len);
-  store_path[store_path_len + store_len] = '\0';
-  fp = fopen(store_path, "wb");
-  if (!fp)
-    return -EINVAL;
+    strncpy(store_path + store_path_len, store, store_len);
+    store_path[store_path_len + store_len] = '\0';
+    fp = fopen(store_path, "wb");
+    if (!fp) {
+        return -EINVAL;
+    }
 
-  size = fwrite(buf, 1, size, fp);
-  fclose(fp);
-  return size;
+    size = fwrite(buf, 1, size, fp);
+    fclose(fp);
+    return size;
 }
 #endif /* OC_SECURITY */

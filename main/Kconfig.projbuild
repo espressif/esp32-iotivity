@@ -14,4 +14,19 @@ config WIFI_PASSWORD
 
 		Can be left blank if the network has no security set.
 
+
+choice ESP32_IOTIVITY_MODE
+    prompt "iotivity: mode select"
+    default IOTIVITY_CLIENT
+    help
+        Select iotvity mode(client/server).
+
+config IOTIVITY_CLIENT
+    bool "iotivity client"
+ 
+config IOTIVITY_SERVER
+    bool "iotivity server"
+ 
+endchoice
+
 endmenu

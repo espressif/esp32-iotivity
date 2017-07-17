@@ -1,0 +1,3 @@
+[submodule "components/iotivity/iotivity-constrained"]
+	path = components/iotivity/iotivity-constrained
+	url = https://github.com/iotivity/iotivity-constrained.git

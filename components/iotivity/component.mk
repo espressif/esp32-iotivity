@@ -2,11 +2,16 @@
 # Component Makefile
 #
 
-CFLAGS += -DOC_CLIENT
-#CFLAGS += -DOC_SERVER
+ifdef CONFIG_IOTIVITY_CLIENT
+	CFLAGS += -DOC_CLIENT
+else
+	CFLAGS += -DOC_SERVER
+endif
+
 
 COMPONENT_ADD_INCLUDEDIRS :=  \
 adapter	\
+adapter/include	\
 iotivity-constrained	\
 iotivity-constrained/include \
 iotivity-constrained/messaging/coap \
@@ -24,8 +29,10 @@ adapter/random.o	\
 adapter/storage.o	\
 adapter/clock.o		\
 adapter/ipadapter.o	\
-adapter/ipadapter.o	\
 adapter/abort.o		\
+adapter/exception_handling.o	\
+adapter/debug_print.o	\
+adapter/freertos_mutex.o	\
 \
 iotivity-constrained/util/oc_etimer.o \
 iotivity-constrained/util/oc_list.o \
@@ -55,15 +62,12 @@ iotivity-constrained/messaging/coap/observe.o	\
 iotivity-constrained/messaging/coap/separate.o	\
 iotivity-constrained/messaging/coap/transactions.o	
 
-
-
 COMPONENT_SRCDIRS :=  \
 iotivity-constrained/util  \
 iotivity-constrained/api \
 iotivity-constrained/messaging/coap	\
 iotivity-constrained/deps/tinycbor/src	\
 adapter
-
 
 
 
