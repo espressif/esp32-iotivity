@@ -23,14 +23,16 @@
 #include "freertos_mutex.h"
 #include "exception_handling.h"
 #include "lightbulb.h"
+#include "debug_print.h"
 
 #define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
 
 static EventGroupHandle_t wifi_event_group;
-static const int CONNECTED_BIT = BIT0;
 
-typedef xSemaphoreHandle osi_mutex_t;
+static const int IPV4_CONNECTED_BIT = BIT0;
+static const int IPV6_CONNECTED_BIT = BIT1;
+
 static osi_mutex_t m_ev;
 static osi_mutex_t m_cv;
 
@@ -38,6 +40,8 @@ static struct timespec ts;
 static int quit = 0;
 static bool light_state = false;
 static const char *TAG = "iotivity server";
+
+void start_sntp();
 
 static void set_device_custom_property(void *data)
 {
@@ -53,6 +57,7 @@ static int app_init(void)
     return ret;
 }
 
+// get state and response to client
 static void get_light(oc_request_t *request, oc_interface_mask_t interface, void *user_data)
 {
     (void)user_data;
@@ -98,10 +103,10 @@ static void post_light(oc_request_t *request, oc_interface_mask_t interface, voi
             PRINT("value: %d\n", rep->value.integer);
             // process light info...
             notify_lightbulb_state(rep->value.integer, 0);
-            vTaskDelay(50);
+            vTaskDelay(50);     // keep light state ticks
             break;
 
-        // ...
+        // case ...
         default:
             oc_send_response(request, OC_STATUS_BAD_REQUEST);
             return;
@@ -157,15 +162,15 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         break;
 
     case SYSTEM_EVENT_STA_GOT_IP:
-        ESP_LOGI(TAG, "ESP32 get an IPV4 Address!");
-
+        xEventGroupSetBits(wifi_event_group, IPV4_CONNECTED_BIT);
         break;
 
     case SYSTEM_EVENT_STA_DISCONNECTED:
         /* This is a workaround as ESP32 WiFi libs don't currently
            auto-reassociate. */
         esp_wifi_connect();
-        xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+        xEventGroupClearBits(wifi_event_group, IPV4_CONNECTED_BIT);
+        xEventGroupClearBits(wifi_event_group, IPV6_CONNECTED_BIT);
         break;
 
     case SYSTEM_EVENT_STA_CONNECTED:
@@ -173,8 +178,7 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         break;
 
     case SYSTEM_EVENT_AP_STA_GOT_IP6:
-        xEventGroupSetBits(wifi_event_group, CONNECTED_BIT);
-        ESP_LOGI(TAG, "ESP32 get an IPV6 Address!");
+        xEventGroupSetBits(wifi_event_group, IPV6_CONNECTED_BIT);
         break;
 
     default:
@@ -198,7 +202,7 @@ static void initialise_wifi(void)
             .password = EXAMPLE_WIFI_PASS,
         },
     };
-    ESP_LOGI(TAG, "Setting WiFi configuration SSID %s...", wifi_config.sta.ssid);
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -209,19 +213,32 @@ static void iotivity_server_task(void *pvParameter)
     time_t now;
     struct tm timeinfo;
     char strftime_buf[64];
+    tcpip_adapter_ip_info_t ip4_info = { 0 };
+    struct ip6_addr if_ipaddr_ip6 = { 0 };
+    static const oc_handler_t handler = {.init = app_init,
+                                         .signal_event_loop = signal_event_loop,
+                                         .register_resources = register_resources
+                                        };
 
-    xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT,
-                        false, true, portMAX_DELAY);
-    ESP_LOGI(TAG, "OIC server task started,had Connected to AP with IPv6 address");
+    oc_clock_time_t next_event;
 
-    if (mutex_new(&m_cv) || mutex_new(&m_ev)) {
-        ESP_LOGE(TAG, "new mutex failed!");
+    xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT | IPV6_CONNECTED_BIT, false, true, portMAX_DELAY);
+    ESP_LOGI(TAG, "iotivity server task started, had got IPV4 && IPv6 address");
+
+    if ( tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip4_info) != ESP_OK){
+        ESP_LOGE(TAG, "get IPv4 address failed");
         task_fatal_error();
     }
 
-    oc_clock_time_t currenttick = oc_clock_time();
-    int tick_per_ms = portTICK_PERIOD_MS;
-    ESP_LOGI(TAG, "tick_per_ms:%d & %llu\n", tick_per_ms, currenttick / portTICK_PERIOD_MS);
+    if ( tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr_ip6) != ESP_OK){
+        ESP_LOGE(TAG, "get IPv6 address failed");
+        task_fatal_error();
+    }
+    ESP_LOGI(TAG, "got IPv4:%s", ip4addr_ntoa(&(ip4_info.ip)));
+    ESP_LOGI(TAG, "got IPv6:%s", ip6addr_ntoa(&if_ipaddr_ip6));
+
+    // get realtime from sntp server
+    start_sntp();
 
     time(&now);
     // Set timezone to China Standard Time
@@ -231,21 +248,17 @@ static void iotivity_server_task(void *pvParameter)
     strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
     ESP_LOGI(TAG, "The current date/time in Shanghai is: %s", strftime_buf);
 
-    int init_value = 0;
-    static const oc_handler_t handler = {.init = app_init,
-                                         .signal_event_loop = signal_event_loop,
-                                         .register_resources = register_resources
-                                        };
-
-    oc_clock_time_t next_event;
+    if (mutex_new(&m_cv) || mutex_new(&m_ev)) {
+        ESP_LOGE(TAG, "new mutex failed!");
+        task_fatal_error();
+    }
 
 #ifdef OC_SECURITY
     oc_storage_config("./creds");
 #endif /* OC_SECURITY */
 
-    init_value = oc_main_init(&handler);
-
-    if (init_value < 0) {
+    if (oc_main_init(&handler) < 0) {
+        ESP_LOGE(TAG, "oc main init failed");
         return task_fatal_error();
     }
 
@@ -270,14 +283,30 @@ static void iotivity_server_task(void *pvParameter)
     }
 
     oc_main_shutdown();
+    mutex_delete(&m_ev);
+    mutex_delete(&m_cv);
     vTaskDelete(NULL);
     return;
 }
 
 void app_main(void)
 {
-    nvs_flash_init();
+    if (nvs_flash_init() != ESP_OK){
+        ESP_LOGE(TAG, "nvs_flash_init failed");
+        task_fatal_error();
+    }
+
+    print_macro_info();
+
     initialise_wifi();
-    xTaskCreate(&iotivity_server_task, "iotivity_server_task", 8192, NULL, 5, NULL);
-    xTaskCreate(&lightbulb_damon_task, "lightbulb_damon_task", 8192, NULL, 5, NULL);
+
+    if ( xTaskCreate(&iotivity_server_task, "iotivity_server_task", 8192, NULL, 5, NULL) != pdPASS ) {
+        ESP_LOGE(TAG, "task create failed");
+        task_fatal_error();
+    }
+
+    if ( xTaskCreate(&lightbulb_damon_task, "lightbulb_damon_task", 8192, NULL, 5, NULL) != pdPASS ) {
+        ESP_LOGE(TAG, "task create failed");
+        task_fatal_error();
+    }
 }

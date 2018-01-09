@@ -51,7 +51,7 @@ void lightbulb_deinit(void);
  *
  * @return none
  */
-int lightbulb_set_on(void *p);
+void lightbulb_set_on(void *p);
 
 /**
  * @brief set the saturation of the lowlevel lightbulb
@@ -62,7 +62,7 @@ int lightbulb_set_on(void *p);
  *     - 0 : OK
  *     - others : fail
  */
-int lightbulb_set_saturation(void *p);
+void lightbulb_set_saturation(void *p);
 
 /**
  * @brief set the hue of the lowlevel lightbulb
@@ -73,7 +73,7 @@ int lightbulb_set_saturation(void *p);
  *     - 0 : OK
  *     - others : fail
  */
-int lightbulb_set_hue(void *p);
+void lightbulb_set_hue(void *p);
 
 /**
  * @brief set the brightness of the lowlevel lightbulb
@@ -84,16 +84,48 @@ int lightbulb_set_hue(void *p);
  *     - 0 : OK
  *     - others : fail
  */
-int lightbulb_set_brightness(void *p);
+void lightbulb_set_brightness(void *p);
 
+/**
+ * @brief  notify light state to set, time interval to set
+ *
+ * @param[in] state state to set
+ * @param[in] time interval to set
+ *
+ * @return  noreturn
+ *
+ * */
 void notify_lightbulb_state(bulb_color_t in_color, int flash_interval);
 
+/**
+ * @brief get current light state
+ *
+ * @param[in]  in parameter input
+ *
+ * @return  struct bulb_state_t which including light state
+ * */
 bulb_state_t *get_current_bulb_state();
 
+/**
+ * @brief set current light state
+ *
+ * @param[in]  input_save_bulb_state: struct bulb_state_t which including light state
+ *
+ * @return  noreturn
+ * */
 void set_current_bulb_state(bulb_state_t input_save_bulb_state);
 
+/**
+ * @brief  set light state off
+ *
+ * @param[in]  no parameter input
+ *
+ * @return  noreturn
+ *
+ * */
 void lightbulb_set_off();
 
+// main light state damon task
 void lightbulb_damon_task(void *pvParameter);
 
 #endif /* LIGHTBULB_H_ */

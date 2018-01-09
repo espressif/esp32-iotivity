@@ -1,3 +1,8 @@
+/*
+ * same to iotivity-constrained/port/linux/config.h
+ *
+ */
+
 #ifndef CONFIG_H
 #define CONFIG_H
 
@@ -6,7 +11,6 @@
 #include <time.h>
 typedef uint64_t oc_clock_time_t;
 
-//#define CLOCKS_PER_SEC 100
 #define OC_CLOCK_CONF_TICKS_PER_SECOND CLOCKS_PER_SEC
 
 /* Security Layer */

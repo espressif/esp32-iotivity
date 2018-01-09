@@ -1,4 +1,4 @@
-/* MFI Lightbulb Example
+/* lightbulb implement
 
    This example code is in the Public Domain (or CC0 licensed, at your option.)
 
@@ -8,11 +8,23 @@
 */
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "driver/ledc.h"
 #include "esp_log.h"
 #include "lightbulb.h"
-#include <stdlib.h>
+#include "debug_print.h"
+
+// default:
+// GPIO4  ->  Red
+// GPIO5  ->  Green
+// GPIO21 ->  Blue
+#define LEDC_IO_0 (4)
+#define LEDC_IO_1 (5)
+#define LEDC_IO_2 (21)
+
+#define PWM_DEPTH (1023)
+#define PWM_TARGET_DUTY 8192
 
 typedef struct rgb {
     uint8_t r;  // 0-100 %
@@ -26,20 +38,13 @@ typedef struct hsp {
     uint16_t b;  // 0-100
 } hsp_t;
 
-#define LEDC_IO_0 (4)
-#define LEDC_IO_1 (5)
-#define LEDC_IO_2 (21)
-
-#define PWM_DEPTH (1023)
-#define PWM_TARGET_DUTY 8192
-
 static hsp_t s_hsb_val;
 static uint16_t s_brightness;
 static bool s_on = false;
 
 static bulb_state_t s_bulb_state = {false, 0, 0, 0, 0};
 
-static const char *TAG = "lightbulb";
+static const char *TAG = "light bulb";
 
 /**
  * @brief transform lightbulb's "RGB" and other parameter
@@ -137,6 +142,7 @@ static bool lightbulb_set_aim_hsv(uint16_t h, uint16_t s, uint16_t v)
     bool ret = lightbulb_set_hsb2rgb(h, s, v, &rgb_tmp);
 
     if (ret == false) {
+        ESP_LOGE(TAG, "lightbulb_set_hsb2rgb failed");
         return false;
     }
 
@@ -222,11 +228,11 @@ void lightbulb_deinit(void)
 /**
  * @brief turn on/off the lowlevel lightbulb
  */
-int lightbulb_set_on(void *p)
+void lightbulb_set_on(void *p)
 {
     bool value = *(bool *)p;
 
-    ESP_LOGI(TAG, "lightbulb_set_on : %s", value == true ? "true" : "false");
+    APP_DBG("lightbulb_set_on : %s", value == true ? "true" : "false");
 
     if (value == true) {
         s_hsb_val.b = s_brightness;
@@ -238,9 +244,17 @@ int lightbulb_set_on(void *p)
     }
 
     lightbulb_update();
-    return 0;
+    return;
 }
 
+/**
+ * @brief  set light state off
+ *
+ * @param[in]  no parameter input
+ *
+ * @return  noreturn
+ *
+ * */
 void lightbulb_set_off()
 {
     s_hsb_val.b = 0;
@@ -251,11 +265,11 @@ void lightbulb_set_off()
 /**
  * @brief set the saturation of the lowlevel lightbulb
  */
-int lightbulb_set_saturation(void *p)
+void lightbulb_set_saturation(void *p)
 {
     double value = *(double *)p;
 
-    ESP_LOGI(TAG, "lightbulb_set_saturation : %f", value);
+    APP_DBG("lightbulb_set_saturation : %f", value);
 
     s_hsb_val.s = value;
 
@@ -263,17 +277,17 @@ int lightbulb_set_saturation(void *p)
         lightbulb_update();
     }
 
-    return 0;
+    return;
 }
 
 /**
  * @brief set the hue of the lowlevel lightbulb
  */
-int lightbulb_set_hue(void *p)
+void lightbulb_set_hue(void *p)
 {
     double value = *(double *)p;
 
-    ESP_LOGI(TAG, "lightbulb_set_hue : %f", value);
+    APP_DBG("lightbulb_set_hue : %f", value);
 
     s_hsb_val.h = value;
 
@@ -281,17 +295,17 @@ int lightbulb_set_hue(void *p)
         lightbulb_update();
     }
 
-    return 0;
+    return;
 }
 
 /**
  * @brief set the brightness of the lowlevel lightbulb
  */
-int lightbulb_set_brightness(void *p)
+void lightbulb_set_brightness(void *p)
 {
     int value = *(int *)p;
 
-    ESP_LOGI(TAG, "lightbulb_set_brightness : %d", value);
+    APP_DBG("lightbulb_set_brightness : %d", value);
 
     s_hsb_val.b = value;
     s_brightness = s_hsb_val.b;
@@ -300,9 +314,18 @@ int lightbulb_set_brightness(void *p)
         lightbulb_update();
     }
 
-    return 0;
+    return;
 }
 
+/**
+ * @brief  notify light state to set, time interval to set
+ *
+ * @param[in] state state to set
+ * @param[in] time interval to set
+ *
+ * @return  noreturn
+ *
+ * */
 void notify_lightbulb_state(bulb_color_t state, int flash_interval)
 {
     switch (state) {
@@ -344,19 +367,33 @@ void notify_lightbulb_state(bulb_color_t state, int flash_interval)
     }
 
     default:
-        ESP_LOGI(TAG, "Only support RED,GREEN,BLUE COLOR!");
+        ESP_LOGI(TAG, "only support RED,GREEN,BLUE,OTHERs COLOR!");
     }
 
     s_bulb_state.flash_interval = flash_interval;
-    ESP_LOGI(TAG, "Set state!!!set on state:%d flash interval:%d H:%f S:%f B:%d", \
+    ESP_LOGI(TAG, "set on/off state:%d flash interval:%d H:%f S:%f B:%d", \
              s_bulb_state.set_on, s_bulb_state.flash_interval, s_bulb_state.hue_value, s_bulb_state.saturation_value, s_bulb_state.brightness_value);
 }
 
+/**
+ * @brief get current light state
+ *
+ * @param[in]  in parameter input
+ *
+ * @return  struct bulb_state_t which including light state
+ * */
 bulb_state_t *get_current_bulb_state()
 {
     return &s_bulb_state;
 }
 
+/**
+ * @brief set current light state
+ *
+ * @param[in]  input_save_bulb_state: struct bulb_state_t which including light state
+ *
+ * @return  noreturn
+ * */
 void set_current_bulb_state(bulb_state_t input_save_bulb_state)
 {
     s_bulb_state = input_save_bulb_state;

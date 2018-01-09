@@ -1,25 +1,23 @@
-menu "Example Configuration"
+menu "IoTivity Example Configuration"
 
 config WIFI_SSID
     string "WiFi SSID"
 	default "myssid"
 	help
-		SSID (network name) for the example to connect to.
+		SSID (network name) for the ESP32 to connect to.
 
 config WIFI_PASSWORD
     string "WiFi Password"
 	default "myssid"
 	help
-		WiFi password (WPA or WPA2) for the example to use.
-
-		Can be left blank if the network has no security set.
-
+		WiFi password (WPA or WPA2) for the ESP32 to match.
+		can be blank if the network has no security set.
 
 choice ESP32_IOTIVITY_MODE
     prompt "iotivity: mode select"
     default IOTIVITY_CLIENT
     help
-        Select iotvity mode(client/server).
+        select iotvity mode(client/server).
 
 config IOTIVITY_CLIENT
     bool "iotivity client"
@@ -28,5 +26,15 @@ config IOTIVITY_SERVER
     bool "iotivity server"
  
 endchoice
+
+config OC_DEBUG
+    bool "OC_DEBUG"
+    help
+        enable or disable IoTivity-constrained debug
+
+config APP_DEBUG
+    bool "APP_DEBUG"
+    help
+        enable or disable application debug
 
 endmenu

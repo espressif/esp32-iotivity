@@ -26,26 +26,36 @@
 #include "oc_buffer.h"
 #include "port/oc_connectivity.h"
 
+#include "freertos_mutex.h"
+#include "exception_handling.h"
+#include "debug_print.h"
+
+// most of function declaration is under iotivity-constrained/port/oc_connectivity.h and oc_network_events_mutex.h
+
 #define OCF_PORT_UNSECURED (5683)
+
 static const uint8_t ALL_OCF_NODES_LL[] = {
     0xff, 0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x58
 };
+
 static const uint8_t ALL_OCF_NODES_RL[] = {
     0xff, 0x03, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x58
 };
+
 static const uint8_t ALL_OCF_NODES_SL[] = {
     0xff, 0x05, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x01, 0x58
 };
+
 #define ALL_COAP_NODES_V4 0xe00001bb
 
 static TaskHandle_t event_thread = NULL;
 
-typedef xSemaphoreHandle osi_mutex_t;
-
 static osi_mutex_t mutex;
 
 static struct sockaddr_storage mcast, server, client;
+
 static int server_sock = -1, mcast_sock = -1, terminate;
+
 #ifdef OC_IPV4
 static struct sockaddr_storage mcast4, server4;
 static int server4_sock = -1, mcast4_sock = -1;
@@ -67,29 +77,31 @@ oc_connectivity_get_dtls_port(void)
 }
 #endif /* OC_SECURITY */
 
-void
-oc_network_event_handler_mutex_init(void)
+void oc_network_event_handler_mutex_init(void)
 {
-    mutex = xSemaphoreCreateMutex();
-    if (mutex == NULL) {
-        OC_ERR("initializing network event handler mutex\n");
+    if (mutex_new(&mutex) < 0) {
+        OC_ERR("initializing network event handler mutex failed\n");
+        task_fatal_error();
     }
 }
 
-void
-oc_network_event_handler_mutex_lock(void)
+void oc_network_event_handler_mutex_lock(void)
 {
-    while (xSemaphoreTake(mutex, portMAX_DELAY) != pdPASS);
+    if (mutex_lock(&mutex) < 0) {
+        OC_ERR("mutex_lock network event handler mutex failed\n");
+        task_fatal_error();
+    }
 }
 
-void
-oc_network_event_handler_mutex_unlock(void)
+void oc_network_event_handler_mutex_unlock(void)
 {
-    xSemaphoreGive(mutex);
+    if (mutex_unlock(&mutex) < 0) {
+        OC_ERR("mutex_unlock network event handler mutex failed\n");
+        task_fatal_error();
+    }
 }
 
-static void *
-network_event_thread(void *data)
+static void *network_event_thread(void *data)
 {
     (void)data;
     struct sockaddr_in6 *c = (struct sockaddr_in6 *)&client;
@@ -117,10 +129,11 @@ network_event_thread(void *data)
 #endif
 #endif
 
-    int i, n;
+    int i = 0, n = 0;
     while (!terminate) {
         len = sizeof(client);
         setfds = rfds;
+
         int maxfd = (server_sock > mcast_sock) ? server_sock : mcast_sock;
         n = select(maxfd + 1, &setfds, NULL, NULL, NULL);
         for (i = 0; i < n; i++) {
@@ -241,7 +254,7 @@ common:
 void
 oc_send_buffer(oc_message_t *message)
 {
-    //print_message_info(message);
+    print_message_info(message);
     OC_DBG("Outgoing message to ");
     OC_LOGipaddr(message->endpoint);
     OC_DBG("\n");
@@ -399,18 +412,17 @@ connectivity_ipv4_init(void)
 }
 #endif  /* OC_IPV4*/
 
-static int
-add_mcast_sock_to_ipv6_multicast_group(const uint8_t *addr)
+static int add_mcast_sock_to_ipv6_multicast_group(const uint8_t *addr)
 {
     if (mld6_joingroup(IP6_ADDR_ANY, addr) != ERR_OK) {
         OC_ERR("failed to joining IPv6 multicast group %d\n", errno);
         return -1;
     }
+
     return 0;
 }
 
-int
-oc_connectivity_init(void)
+int oc_connectivity_init(void)
 {
     memset(&mcast, 0, sizeof(struct sockaddr_storage));
     memset(&server, 0, sizeof(struct sockaddr_storage));
@@ -438,7 +450,6 @@ oc_connectivity_init(void)
 
     if (server_sock < 0 || mcast_sock < 0) {
         OC_ERR("creating server sockets\n");
-
         return -1;
     }
 
@@ -452,20 +463,16 @@ oc_connectivity_init(void)
 
     if (bind(server_sock, (struct sockaddr *)&server, sizeof(server)) == -1) {
         OC_ERR("binding server socket %d\n", errno);
-
         return -1;
     }
 
     if (add_mcast_sock_to_ipv6_multicast_group(ALL_OCF_NODES_LL) < 0) {
-
         return -1;
     }
     if (add_mcast_sock_to_ipv6_multicast_group(ALL_OCF_NODES_RL) < 0) {
-
         return -1;
     }
     if (add_mcast_sock_to_ipv6_multicast_group(ALL_OCF_NODES_SL) < 0) {
-
         return -1;
     }
 

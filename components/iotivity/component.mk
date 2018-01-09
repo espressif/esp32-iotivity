@@ -2,15 +2,7 @@
 # Component Makefile
 #
 
-ifdef CONFIG_IOTIVITY_CLIENT
-	CFLAGS += -DOC_CLIENT
-else
-	CFLAGS += -DOC_SERVER
-endif
-
-
 COMPONENT_ADD_INCLUDEDIRS :=  \
-adapter	\
 adapter/include	\
 iotivity-constrained	\
 iotivity-constrained/include \
@@ -25,14 +17,14 @@ iotivity-constrained/deps/tinycbor/src/cborencoder.o	\
 iotivity-constrained/deps/tinycbor/src/cborencoder_close_container_checked.o	\
 iotivity-constrained/deps/tinycbor/src/cborparser.o	\
 \
-adapter/random.o	\
-adapter/storage.o	\
-adapter/clock.o		\
-adapter/ipadapter.o	\
-adapter/abort.o		\
-adapter/exception_handling.o	\
-adapter/debug_print.o	\
-adapter/freertos_mutex.o	\
+adapter/src/random.o	\
+adapter/src/storage.o	\
+adapter/src/clock.o		\
+adapter/src/ipadapter.o	\
+adapter/src/abort.o		\
+adapter/src/exception_handling.o	\
+adapter/src/debug_print.o	\
+adapter/src/freertos_mutex.o	\
 \
 iotivity-constrained/util/oc_etimer.o \
 iotivity-constrained/util/oc_list.o \
@@ -67,17 +59,4 @@ iotivity-constrained/util  \
 iotivity-constrained/api \
 iotivity-constrained/messaging/coap	\
 iotivity-constrained/deps/tinycbor/src	\
-adapter
-
-
-
-
-
-
-
-
-
-
-
-
-
+adapter/src

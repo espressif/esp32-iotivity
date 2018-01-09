@@ -14,15 +14,24 @@
 // limitations under the License.
 */
 
-#include "port/oc_assert.h"
-#include <assert.h>
+#include "port/oc_random.h"
+#include "esp_system.h"
 
+// function declaration is under iotivity-constrained/port/oc_random.h
 
-// TODO:
-#ifndef __linux__
-void
-abort_impl()
+void oc_random_init(void)
 {
-    assert(NULL);
+    //urandom_fd = open("/dev/urandom", O_RDONLY);
 }
-#endif /* __linux__ */
+
+unsigned int oc_random_value(void)
+{
+    unsigned int rand = 0;
+    rand = (unsigned int)esp_random();
+    return rand;
+}
+
+void oc_random_destroy(void)
+{
+    //close(urandom_fd);
+}
