@@ -1,3 +1,6 @@
 [submodule "components/iotivity/iotivity-constrained"]
 	path = components/iotivity/iotivity-constrained
 	url = https://github.com/iotivity/iotivity-constrained.git
+[submodule "esp-idf"]
+	path = esp-idf
+	url = https://github.com/espressif/esp-idf.git
