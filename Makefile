@@ -3,6 +3,9 @@
 # project subdirectory.
 #
 
+export PROJECT_PATH := $(PWD)
+export IDF_PATH ?= $(PWD)/esp-idf
+
 include $(IDF_PATH)/make/project.mk
 
 # sdkconfig is included project.mk recursively
