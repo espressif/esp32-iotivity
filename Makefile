@@ -27,3 +27,19 @@ endif
 ifdef CONFIG_APP_DEBUG
     CFLAGS += -DAPP_DEBUG
 endif
+
+ifdef CONFIG_DYNAMIC
+    CFLAGS += -DOC_DYNAMIC_ALLOCATION
+endif
+
+ifdef CONFIG_SECURE
+    CFLAGS += -DOC_SECURITY
+endif
+
+ifdef CONFIG_IPV4
+    CFLAGS += -DOC_IPV4
+endif
+
+ifdef CONFIG_TCP
+    CFLAGS += -DOC_TCP
+endif
