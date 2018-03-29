@@ -22,7 +22,6 @@ adapter/src/storage.o	\
 adapter/src/clock.o		\
 adapter/src/ipadapter.o	\
 adapter/src/abort.o		\
-adapter/src/exception_handling.o	\
 adapter/src/debug_print.o	\
 adapter/src/freertos_mutex.o	\
 \

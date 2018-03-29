@@ -1,5 +1,5 @@
 /*
-// Copyright (c) 2016 Intel Corporation
+// Copyright (c) 2017 Intel Corporation
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,13 +15,17 @@
 */
 
 #include "port/oc_assert.h"
-#include <assert.h>
+#include <stdlib.h>
 
-// function declaration is under iotivity-constrained/port/oc_assert.h
-#ifndef __linux__
 void
-abort_impl()
+abort_impl(void)
 {
-    assert(NULL);
+  assert(NULL);
 }
-#endif /* __linux__ */
+
+void
+exit_impl(int status)
+{
+  (void)status;
+  assert(NULL);
+}
