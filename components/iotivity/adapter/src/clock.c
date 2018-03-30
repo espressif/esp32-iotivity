@@ -13,12 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 */
-
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 #include "port/oc_clock.h"
 #include "port/oc_log.h"
-#include <math.h>
+#include "lwip/timers.h"
 #include <time.h>
-#include <unistd.h>
 
 void
 oc_clock_init(void)
@@ -28,27 +28,23 @@ oc_clock_init(void)
 oc_clock_time_t
 oc_clock_time(void)
 {
-  oc_clock_time_t time = 0;
-  struct timespec t;
-  if (clock_gettime(CLOCK_REALTIME, &t) != -1) {
-    time = (oc_clock_time_t)t.tv_sec * OC_CLOCK_SECOND +
-           (oc_clock_time_t)ceil(t.tv_nsec / (1.e09 / OC_CLOCK_SECOND));
-  }
-  return time;
+    oc_clock_time_t time = 0;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    time = now.tv_sec * portTICK_RATE_MS + now.tv_usec / (1000 * 1000 / portTICK_RATE_MS);
+    return time;
 }
 
 unsigned long
 oc_clock_seconds(void)
 {
-  struct timespec t;
-  if (clock_gettime(CLOCK_REALTIME, &t) != -1) {
-    return t.tv_sec;
-  }
-  return 0;
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    return now.tv_sec;
 }
 
 void
 oc_clock_wait(oc_clock_time_t t)
 {
-  usleep(t * 1.e03);
+  vTaskDelay(t);
 }
