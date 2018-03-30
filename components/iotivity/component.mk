@@ -23,7 +23,6 @@ adapter/src/clock.o		\
 adapter/src/ipadapter.o	\
 adapter/src/abort.o		\
 adapter/src/debug_print.o	\
-adapter/src/freertos_mutex.o	\
 \
 iotivity-constrained/util/oc_etimer.o \
 iotivity-constrained/util/oc_list.o \
