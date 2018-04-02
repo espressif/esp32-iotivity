@@ -13,9 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 */
-//
-
-#include "freertos/FreeRTOS.h"
+#include <stdio.h>
+#include <pthread.h>
+ #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
 #include "freertos/event_groups.h"
@@ -31,245 +31,189 @@
 #include "oc_api.h"
 #include "port/oc_clock.h"
 #include "freertos_mutex.h"
-#include "exception_handling.h"
 #include "debug_print.h"
 #include "lightbulb.h"
 
+static pthread_cond_t cv;
+static struct timespec ts;
+static int quit = 0;
+static const char *TAG = "iotivity client";
+
 #define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
 #define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
-#define MAX_URI_LENGTH (30)
 
 static EventGroupHandle_t wifi_event_group;
 
 static const int IPV4_CONNECTED_BIT = BIT0;
 static const int IPV6_CONNECTED_BIT = BIT1;
 
-static osi_mutex_t m_ev;
-static osi_mutex_t m_cv;
+static int
+app_init(void)
+{
+  int ret = oc_init_platform("Intel Corporation", NULL, NULL);
+  ret |= oc_add_device("/oic/d", "oic.wk.d", "Generic Client", "ocf.1.0.0",
+                       "ocf.res.1.3.0", NULL, NULL);
+  return ret;
+}
 
-static struct timespec ts;
-static int quit = 0;
-static const char *TAG = "iotivity client";
-
+#define MAX_URI_LENGTH (30)
 static char light_1[MAX_URI_LENGTH];
-static oc_server_handle_t light_server;
+static oc_endpoint_t *light_server;
 static bool light_state = false;
 
-void start_sntp();
-
-static void set_device_custom_property(void *data)
+static oc_event_callback_retval_t
+stop_observe(void *data)
 {
-    (void)data;
-    oc_set_custom_device_property(purpose, "operate lamp");
+  (void)data;
+  PRINT("Stopping OBSERVE\n");
+  oc_stop_observe(light_1, light_server);
+  return OC_EVENT_DONE;
 }
 
-static int app_init(void)
+static void
+post_light(oc_client_response_t *data)
 {
-    int ret = oc_init_platform("Apple", NULL, NULL);
-    ret |= oc_add_device("/oic/d", "oic.d.phone", "Kishen's IPhone", "1.0", "1.0",
-                         set_device_custom_property, NULL);
-    return ret;
+  PRINT("POST_light:\n");
+  if (data->code == OC_STATUS_CHANGED)
+    PRINT("POST response OK\n");
+  else
+    PRINT("POST response code %d\n", data->code);
 }
 
-static oc_event_callback_retval_t stop_observe(void *data)
+static void
+observe_light(oc_client_response_t *data)
 {
-    (void)data;
-    PRINT("Stopping OBSERVE\n");
-    oc_stop_observe(light_1, &light_server);
-    return DONE;
-}
-
-// client post response
-static void post_light(oc_client_response_t *data)
-{
-    PRINT("POST_light:\n");
-
-    if (data->code == OC_STATUS_CHANGED) {
-        PRINT("POST response OK\n");
-    } else {
-        PRINT("POST response code %d\n", data->code);
+  PRINT("OBSERVE_light:\n");
+  oc_rep_t *rep = data->payload;
+  while (rep != NULL) {
+    PRINT("key %s, value ", oc_string(rep->name));
+    switch (rep->type) {
+    case OC_REP_BOOL:
+      PRINT("%d\n", rep->value.boolean);
+      light_state = rep->value.boolean;
+      break;
+    default:
+      break;
     }
+    rep = rep->next;
+  }
+
+  if (oc_init_post(light_1, light_server, NULL, &post_light, LOW_QOS, NULL)) {
+    oc_rep_start_root_object();
+    oc_rep_set_boolean(root, state, !light_state);
+    oc_rep_end_root_object();
+    if (oc_do_post())
+      PRINT("Sent POST request\n");
+    else
+      PRINT("Could not send POST\n");
+  } else
+    PRINT("Could not init POST\n");
 }
 
-// observe state && send data to server
-static void observe_light(oc_client_response_t *data)
+static oc_discovery_flags_t
+discovery(const char *di, const char *uri, oc_string_array_t types,
+          oc_interface_mask_t interfaces, oc_endpoint_t *endpoint,
+          oc_resource_properties_t bm, void *user_data)
 {
-    PRINT("OBSERVE_light:\n");
-    oc_rep_t *rep = data->payload;
+  (void)di;
+  (void)interfaces;
+  (void)user_data;
+  (void)bm;
+  int i;
+  int uri_len = strlen(uri);
+  uri_len = (uri_len >= MAX_URI_LENGTH) ? MAX_URI_LENGTH - 1 : uri_len;
 
-    while (rep != NULL) {
-        PRINT("key name: %s ", oc_string(rep->name));
+  for (i = 0; i < (int)oc_string_array_get_allocated_size(types); i++) {
+    char *t = oc_string_array_get_item(types, i);
+    if (strlen(t) == 11 && strncmp(t, "oic.r.light", 11) == 0) {
+      strncpy(light_1, uri, uri_len);
+      light_1[uri_len] = '\0';
+      light_server = endpoint;
 
-        switch (rep->type) {
-        case BOOL:
-            PRINT(" value: %d\n", rep->value.boolean);
-            light_state = rep->value.boolean;
-            break;
+      PRINT("Resource %s hosted at endpoints:\n", light_1);
+      oc_endpoint_t *ep = endpoint;
+      while (ep != NULL) {
+        PRINTipaddr(*ep);
+        PRINT("\n");
+        ep = ep->next;
+      }
 
-        default:
-            break;
-        }
-
-        rep = rep->next;
+      oc_do_observe(light_1, light_server, NULL, &observe_light, LOW_QOS, NULL);
+      oc_set_delayed_callback(NULL, &stop_observe, 10);
+      return OC_STOP_DISCOVERY;
     }
-
-    // prepare send data to server
-    int r_value = BULB_STATE_RED;
-    int g_value = BULB_STATE_GREEN;
-    int b_value = BULB_STATE_BLUE;
-    int w_value = BULB_STATE_OTHERS;
-
-    if (oc_init_post(light_1, &light_server, NULL, &post_light, LOW_QOS, NULL)) {
-        oc_rep_start_root_object();
-        oc_rep_set_boolean(root, state, !light_state);
-        oc_rep_set_int(root, r_value, r_value);
-        oc_rep_set_int(root, g_value, g_value);
-        oc_rep_set_int(root, b_value, b_value);
-        oc_rep_set_int(root, w_value, w_value);
-        // set more param to struct linklist
-        oc_rep_end_root_object();
-
-        if (oc_do_post()) {
-            PRINT("Sent POST request\n");
-        } else {
-            PRINT("Could not send POST\n");
-        }
-    } else {
-        PRINT("Could not init POST\n");
-    }
+  }
+  oc_free_server_endpoints(endpoint);
+  return OC_CONTINUE_DISCOVERY;
 }
 
-// monitor observer
-static oc_discovery_flags_t discovery(const char *di, const char *uri, \
-                                      oc_string_array_t types, oc_interface_mask_t interfaces, \
-                                      oc_server_handle_t *server, void *user_data)
+static void
+issue_requests(void)
 {
-    (void)di;
-    (void)interfaces;
-    (void)user_data;
-    int i;
-    int uri_len = strlen(uri);
-    uri_len = (uri_len >= MAX_URI_LENGTH) ? MAX_URI_LENGTH - 1 : uri_len;
-
-    for (i = 0; i < (int)oc_string_array_get_allocated_size(types); i++) {
-        char *t = oc_string_array_get_item(types, i);
-
-        if (strlen(t) == 11 && strncmp(t, "oic.r.light", 11) == 0) {
-            memcpy(&light_server, server, sizeof(oc_server_handle_t));
-
-            strncpy(light_1, uri, uri_len);
-            light_1[uri_len] = '\0';
-
-            oc_do_observe(light_1, &light_server, NULL, &observe_light, LOW_QOS,
-                          NULL);
-            oc_set_delayed_callback(NULL, &stop_observe, 30);
-            return OC_STOP_DISCOVERY;
-        }
-    }
-
-    return OC_CONTINUE_DISCOVERY;
+  oc_do_ip_discovery("oic.r.light", &discovery, NULL);
 }
 
-static void issue_requests(void)
+static void
+signal_event_loop(void)
 {
-    oc_do_ip_discovery("oic.r.light", &discovery, NULL);
+  pthread_mutex_lock(&mutex);
+  pthread_cond_signal(&cv);
+  pthread_mutex_unlock(&mutex);
 }
 
-static void signal_event_loop(void)
+static void
+handle_signal(int signal)
 {
-    mutex_lock(&m_ev);
-    mutex_unlock(&m_cv);
-    mutex_unlock(&m_ev);
+  (void)signal;
+  signal_event_loop();
+  quit = 1;
 }
 
-static void handle_signal(int signal)
+int
+client_main(void)
 {
-    (void)signal;
-    signal_event_loop();
-    quit = 1;
-}
 
-static void iotivity_client_task(void *pvParameter)
-{
-    time_t now;
-    struct tm timeinfo;
-    char strftime_buf[64];
-    tcpip_adapter_ip_info_t ip4_info = { 0 };
-    struct ip6_addr if_ipaddr_ip6 = { 0 };
-
-    static const oc_handler_t handler = {.init = app_init,
-                                         .signal_event_loop = signal_event_loop,
-                                         .requests_entry = issue_requests
-                                        };
-    oc_clock_time_t next_event;
 
     // wait to fetch IPv4 && ipv6 address
-    xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT | IPV6_CONNECTED_BIT,
-                        false, true, portMAX_DELAY);
+#ifdef OC_IPV4
+    xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT, false, true, portMAX_DELAY);
+    ESP_LOGI(TAG, "iotivity client task started, had got IPV4 address");
+#else
+    xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT | IPV6_CONNECTED_BIT, false, true, portMAX_DELAY);
     ESP_LOGI(TAG, "iotivity client task started, had got IPV4 && IPv6 address");
+#endif
 
-    if ( tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip4_info) != ESP_OK){
-        ESP_LOGE(TAG, "get IPv4 address failed");
-        task_fatal_error();
-    }
 
-    if ( tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr_ip6) != ESP_OK){
-        ESP_LOGE(TAG, "get IPv6 address failed");
-        task_fatal_error();
-    }
-    ESP_LOGI(TAG, "got IPv4:%s", ip4addr_ntoa(&(ip4_info.ip)));
-    ESP_LOGI(TAG, "got IPv6:%s", ip6addr_ntoa(&if_ipaddr_ip6));
+  static const oc_handler_t handler = {.init = app_init,
+                                       .signal_event_loop = signal_event_loop,
+                                       .requests_entry = issue_requests };
 
-    // get realtime from sntp server
-    start_sntp();
-
-    time(&now);
-    // Set timezone to China standard time
-    setenv("TZ", "CST-8", 1);
-    tzset();
-    localtime_r(&now, &timeinfo);
-    strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-    ESP_LOGI(TAG, "The current date/time in Shanghai is: %s", strftime_buf);
-
-    if (mutex_new(&m_cv) || mutex_new(&m_ev)) {
-        ESP_LOGE(TAG, "new mutex failed!");
-        task_fatal_error();
-    }
+  oc_clock_time_t next_event;
 
 #ifdef OC_SECURITY
-    oc_storage_config("./creds");
+  oc_storage_config("./client_creds");
 #endif /* OC_SECURITY */
 
-    if (oc_main_init(&handler) < 0) {
-        ESP_LOGE(TAG, "oc main init failed");
-        return task_fatal_error();
+  oc_set_con_res_announced(false);
+  init = oc_main_init(&handler);
+  if (init < 0)
+    return init;
+
+  while (quit != 1) {
+    next_event = oc_main_poll();
+    pthread_mutex_lock(&mutex);
+    if (next_event == 0) {
+      pthread_cond_wait(&cv, &mutex);
+    } else {
+      ts.tv_sec = (next_event / OC_CLOCK_SECOND);
+      ts.tv_nsec = (next_event % OC_CLOCK_SECOND) * 1.e09 / OC_CLOCK_SECOND;
+      pthread_cond_timedwait(&cv, &mutex, &ts);
     }
+    pthread_mutex_unlock(&mutex);
+  }
 
-    while (quit != 1) {
-        next_event = oc_main_poll();
-        mutex_lock(&m_ev);
-
-        if (next_event == 0) {
-            mutex_unlock(&m_ev);
-            mutex_lock(&m_cv);
-            mutex_lock(&m_ev);
-        } else {
-            ts.tv_sec = (next_event / OC_CLOCK_SECOND);
-            ts.tv_nsec = (next_event % OC_CLOCK_SECOND) * 1.e09 / OC_CLOCK_SECOND;
-            mutex_unlock(&m_ev);
-            uint32_t timeout = 100;
-            xSemaphoreTake(m_cv, timeout / portTICK_PERIOD_MS);
-            mutex_lock(&m_ev);
-        }
-
-        mutex_unlock(&m_ev);
-    }
-
-    oc_main_shutdown();
-    mutex_delete(&m_ev);
-    mutex_delete(&m_cv);
-    vTaskDelete(NULL);
-    return;
+  oc_main_shutdown();
+  return 0;
 }
 
 static esp_err_t event_handler(void *ctx, system_event_t *event)
@@ -292,7 +236,9 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         break;
 
     case SYSTEM_EVENT_STA_CONNECTED:    // ipv4 had connected
+#ifdef !OC_IPV4
         tcpip_adapter_create_ip6_linklocal(TCPIP_ADAPTER_IF_STA);
+#endif
         break;
 
     case SYSTEM_EVENT_AP_STA_GOT_IP6:
@@ -327,19 +273,30 @@ static void initialise_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
+void adapter_init()
+{
+    if (mutex = xSemaphoreCreateMutex() == NULL ) {
+        return -1;
+    }
+
+    return 0;
+}
+
 void app_main(void)
 {
     if (nvs_flash_init() != ESP_OK){
-        ESP_LOGE(TAG, "nvs_flash_init failed");
-        task_fatal_error();
+        print_error("nvs init failed");
+    }
+
+    if ( adapter_init() ) {
+        print_error("adapter failed");
     }
 
     print_macro_info();
 
     initialise_wifi();
 
-    if ( xTaskCreate(&iotivity_client_task, "iotivity_client_task", 8192 * 4, NULL, 5, NULL) != pdPASS ) {
-        ESP_LOGE(TAG, "task create failed");
-        task_fatal_error();
+    if ( xTaskCreate(&client_main, "client_main", 8192, NULL, 5, NULL) != pdPASS ) {
+        print_error("task create failed");
     }
 }
