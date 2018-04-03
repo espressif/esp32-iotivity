@@ -30,10 +30,10 @@
 
 #include "oc_api.h"
 #include "port/oc_clock.h"
-#include "freertos_mutex.h"
 #include "debug_print.h"
 #include "lightbulb.h"
 
+static pthread_mutex_t mutex;
 static pthread_cond_t cv;
 static struct timespec ts;
 static int quit = 0;
@@ -172,8 +172,7 @@ handle_signal(int signal)
 int
 client_main(void)
 {
-
-
+    int init;
     // wait to fetch IPv4 && ipv6 address
 #ifdef OC_IPV4
     xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT, false, true, portMAX_DELAY);
@@ -236,7 +235,7 @@ static esp_err_t event_handler(void *ctx, system_event_t *event)
         break;
 
     case SYSTEM_EVENT_STA_CONNECTED:    // ipv4 had connected
-#ifdef !OC_IPV4
+#ifndef OC_IPV4
         tcpip_adapter_create_ip6_linklocal(TCPIP_ADAPTER_IF_STA);
 #endif
         break;
@@ -273,23 +272,11 @@ static void initialise_wifi(void)
     ESP_ERROR_CHECK(esp_wifi_start());
 }
 
-void adapter_init()
-{
-    if (mutex = xSemaphoreCreateMutex() == NULL ) {
-        return -1;
-    }
-
-    return 0;
-}
 
 void app_main(void)
 {
     if (nvs_flash_init() != ESP_OK){
         print_error("nvs init failed");
-    }
-
-    if ( adapter_init() ) {
-        print_error("adapter failed");
     }
 
     print_macro_info();

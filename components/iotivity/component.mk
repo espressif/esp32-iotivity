@@ -38,7 +38,9 @@ iotivity-constrained/api/oc_client_api.o \
 iotivity-constrained/api/oc_collection.o \
 iotivity-constrained/api/oc_core_res.o \
 iotivity-constrained/api/oc_discovery.o \
+iotivity-constrained/api/oc_endpoint.o \
 iotivity-constrained/api/oc_helpers.o \
+iotivity-constrained/api/oc_introspection.o \
 iotivity-constrained/api/oc_main.o \
 iotivity-constrained/api/oc_network_events.o \
 iotivity-constrained/api/oc_rep.o \
