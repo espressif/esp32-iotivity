@@ -31,8 +31,10 @@
 #include "esp_wifi.h"
 #include "lwip/err.h"
 #include <lwip/netdb.h>
-// most of function declaration is under iotivity-constrained/port/oc_connectivity.h and oc_network_events_mutex.h
+#include "esp_log.h"
 
+static const char* TAG = "ipadapter";
+// most of function declaration is under iotivity-constrained/port/oc_connectivity.h and oc_network_events_mutex.h
 #ifndef IFA_MULTICAST
 #define IFA_MULTICAST 7
 #endif
@@ -154,7 +156,6 @@ static int add_mcast_sock_to_ipv4_mcast_group(int mcast_sock,
 
     err = setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,  &imreq, sizeof(struct ip_mreq));
     if (err < 0) {
-        ESP_LOGE(V4TAG, "Failed to set IP_ADD_MEMBERSHIP. Error %d", errno);
         print_error("setsockopt IP_ADD_MEMBERSHIP ret:%d", err);
     }
 
