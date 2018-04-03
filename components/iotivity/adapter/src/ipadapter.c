@@ -148,12 +148,12 @@ static int add_mcast_sock_to_ipv4_mcast_group(int mcast_sock,
     if (!IP_MULTICAST(ntohl(imreq.imr_multiaddr.s_addr))) {
         print_error("not a valid multicast address");
     }
-
+#ifdef OC_LEAVE_GROUP
     err = setsockopt(mcast_sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, &imreq, sizeof(struct ip_mreq));
     if (err < 0) {
         print_error("setsockopt IP_DROP_MEMBERSHIP ret:%d", err);
     }
-
+#endif
     err = setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,  &imreq, sizeof(struct ip_mreq));
     if (err < 0) {
         print_error("setsockopt IP_ADD_MEMBERSHIP ret:%d", err);
@@ -181,11 +181,12 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock,
     if (!ip6_addr_ismulticast(&multi_addr)) {
         print_error("not a valid ipv6 multicast address");
     }
+#ifdef OC_LEAVE_GROUP
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
         print_error("set IPV6_DROP_MEMBERSHIP ret:%d\n",err);
     }
-
+#endif
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
         print_error("set IPV6_ADD_MEMBERSHIP ret:%d\n",err);
@@ -199,11 +200,12 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock,
     if (!ip6_addr_ismulticast(&multi_addr)) {
         print_error("not a valid ipv6 multicast address");
     }
+#ifdef OC_LEAVE_GROUP
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
         print_error("set IPV6_DROP_MEMBERSHIP ret:%d\n",err);
     }
-
+#endif
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
         print_error("set IPV6_ADD_MEMBERSHIP ret:%d\n",err);
@@ -217,10 +219,12 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock,
     if (!ip6_addr_ismulticast(&multi_addr)) {
         print_error("not a valid ipv6 multicast address");
     }
+#ifdef OC_LEAVE_GROUP
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
         print_error("set IPV6_DROP_MEMBERSHIP ret:%d\n",err);
     }
+#endif
 
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
