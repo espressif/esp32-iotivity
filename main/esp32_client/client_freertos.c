@@ -33,8 +33,8 @@
 #include "debug_print.h"
 #include "lightbulb.h"
 
-static pthread_mutex_t mutex;
-static pthread_cond_t cv;
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 static struct timespec ts;
 static int quit = 0;
 static const char *TAG = "iotivity client";
@@ -278,6 +278,7 @@ void app_main(void)
     if (nvs_flash_init() != ESP_OK){
         print_error("nvs init failed");
     }
+    pthread_cond_init(&cv, NULL);
 
     print_macro_info();
 
