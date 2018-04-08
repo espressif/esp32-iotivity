@@ -56,6 +56,12 @@ void print_macro_info()
     printf("OC_DYNAMIC_ALLOCATION not defined!\n");
 #endif
 
+#ifdef OC_BLOCK_WISE
+    printf("OC_BLOCK_WISE defined!\n");
+#else
+    printf("OC_BLOCK_WISE not defined!\n");
+#endif
+
     printf("\n****************************************\n");
 }
 
