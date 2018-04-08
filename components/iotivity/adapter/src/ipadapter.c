@@ -32,8 +32,10 @@
 #include "lwip/err.h"
 #include <lwip/netdb.h>
 #include "esp_log.h"
+#include "tcpip_adapter.h"
 
 static const char* TAG = "ipadapter";
+
 // most of function declaration is under iotivity-constrained/port/oc_connectivity.h and oc_network_events_mutex.h
 #ifndef IFA_MULTICAST
 #define IFA_MULTICAST 7
@@ -163,11 +165,10 @@ static int add_mcast_sock_to_ipv4_mcast_group(int mcast_sock,
 }
 #endif /* OC_IPV4 */
 
-static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock,
-                                              int interface_index) {
+static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock, int interface_index)
+{
     int err = 0;
     struct ip6_mreq v6imreq = { 0 };
-    ip6_addr_t multi_addr;
     struct ip6_addr if_ipaddr = { 0 };
     err = tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr);
     if (err != ESP_OK) {
@@ -175,12 +176,15 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock,
     }
     /* Link-local scope */
     memset(&v6imreq, 0, sizeof(struct ip6_mreq));
-    inet6_addr_from_ip6addr(&v6imreq.ipv6mr_interface, &if_ipaddr);
-    memcpy(v6imreq.ipv6mr_multiaddr.s6_addr, ALL_OCF_NODES_LL, 16);
-    inet6_addr_to_ip6addr(&multi_addr, &v6imreq.ipv6mr_multiaddr);
-    if (!ip6_addr_ismulticast(&multi_addr)) {
-        print_error("not a valid ipv6 multicast address");
-    }
+    // interface
+     inet6_addr_from_ip6addr(&v6imreq.ipv6mr_interface, &if_ipaddr);
+     // copy ipv6
+     memcpy(v6imreq.ipv6mr_multiaddr.s6_addr, ALL_OCF_NODES_LL, 16);
+     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &v6imreq.ipv6mr_interface, sizeof(struct in6_addr));
+     if (err < 0) {
+         print_error("set opt ret:%d\n", err);
+     }
+
 #ifdef OC_LEAVE_GROUP
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
@@ -196,10 +200,7 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock,
     memset(&v6imreq, 0, sizeof(struct ip6_mreq));
     inet6_addr_from_ip6addr(&v6imreq.ipv6mr_interface, &if_ipaddr);
     memcpy(v6imreq.ipv6mr_multiaddr.s6_addr, ALL_OCF_NODES_RL, 16);
-    inet6_addr_to_ip6addr(&multi_addr, &v6imreq.ipv6mr_multiaddr);
-    if (!ip6_addr_ismulticast(&multi_addr)) {
-        print_error("not a valid ipv6 multicast address");
-    }
+
 #ifdef OC_LEAVE_GROUP
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
@@ -215,10 +216,7 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock,
     memset(&v6imreq, 0, sizeof(struct ip6_mreq));
     inet6_addr_from_ip6addr(&v6imreq.ipv6mr_interface, &if_ipaddr);
     memcpy(v6imreq.ipv6mr_multiaddr.s6_addr, ALL_OCF_NODES_SL, 16);
-    inet6_addr_to_ip6addr(&multi_addr, &v6imreq.ipv6mr_multiaddr);
-    if (!ip6_addr_ismulticast(&multi_addr)) {
-        print_error("not a valid ipv6 multicast address");
-    }
+
 #ifdef OC_LEAVE_GROUP
     err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_DROP_MEMBERSHIP, &v6imreq, sizeof(struct ip6_mreq));
     if (err < 0) {
@@ -230,6 +228,7 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock,
     if (err < 0) {
         print_error("set IPV6_ADD_MEMBERSHIP ret:%d\n",err);
     }
+
   return 0;
 }
 
@@ -392,7 +391,7 @@ static void *network_event_thread(void *data) {
 #endif /* !OC_IPV4 */
         memcpy(message->endpoint.addr.ipv6.address, c->sin6_addr.s6_addr,
                sizeof(c->sin6_addr.s6_addr));
-        message->endpoint.addr.ipv6.scope = c->sin6_scope_id;
+        message->endpoint.addr.ipv6.scope = IPADDR_ANY;
         message->endpoint.addr.ipv6.port = ntohs(c->sin6_port);
       }
 
@@ -466,12 +465,11 @@ void oc_send_buffer(oc_message_t *message) {
            sizeof(r->sin6_addr.s6_addr));
     r->sin6_family = AF_INET6;
     r->sin6_port = htons(message->endpoint.addr.ipv6.port);
-    r->sin6_scope_id = message->endpoint.addr.ipv6.scope;
+    r->sin6_scope_id = IPADDR_ANY;
   }
   int send_sock = -1;
 
   ip_context_t *dev = get_ip_context_for_device(message->endpoint.device);
-
 #ifdef OC_SECURITY
   if (message->endpoint.flags & SECURED) {
 #ifdef OC_IPV4
@@ -546,8 +544,8 @@ oc_send_discovery_request(oc_message_t *message)
           if (err < 0) {
               print_error("set opt ret:%d\n", err);
           }
+          oc_send_buffer(message);
 #endif
-      oc_send_buffer(message);
     }
 
 }
@@ -674,10 +672,18 @@ int oc_connectivity_init(int device) {
   m->sin6_family = AF_INET6;
   m->sin6_port = htons(OCF_PORT_UNSECURED);
   m->sin6_addr = in6addr_any;
+  int err = 0;
+  struct ip6_addr if_ipaddr = { 0 };
 
   struct sockaddr_in6 *l = (struct sockaddr_in6 *)&dev->server;
   l->sin6_family = AF_INET6;
-  l->sin6_addr = in6addr_any;
+
+  err = tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr);
+  if (err != ESP_OK) {
+      print_error("get ip6 ret:%d\n", err);
+  }
+  printf("set interface: " IPV6STR "\n", IPV62STR(if_ipaddr));
+  inet6_addr_from_ip6addr(&l->sin6_addr, &if_ipaddr);
   l->sin6_port = 0;
 
 #ifdef OC_SECURITY
