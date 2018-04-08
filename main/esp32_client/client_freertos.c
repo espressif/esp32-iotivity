@@ -97,7 +97,6 @@ observe_light(oc_client_response_t *data)
     }
     rep = rep->next;
   }
-
   if (oc_init_post(light_1, light_server, NULL, &post_light, LOW_QOS, NULL)) {
     oc_rep_start_root_object();
     oc_rep_set_boolean(root, state, !light_state);
@@ -137,7 +136,6 @@ discovery(const char *di, const char *uri, oc_string_array_t types,
         PRINT("\n");
         ep = ep->next;
       }
-
       oc_do_observe(light_1, light_server, NULL, &observe_light, LOW_QOS, NULL);
       oc_set_delayed_callback(NULL, &stop_observe, 10);
       return OC_STOP_DISCOVERY;
@@ -182,7 +180,6 @@ client_main(void)
     ESP_LOGI(TAG, "iotivity client task started, had got IPV4 && IPv6 address");
 #endif
 
-
   static const oc_handler_t handler = {.init = app_init,
                                        .signal_event_loop = signal_event_loop,
                                        .requests_entry = issue_requests };
@@ -192,12 +189,10 @@ client_main(void)
 #ifdef OC_SECURITY
   oc_storage_config("./client_creds");
 #endif /* OC_SECURITY */
-
   oc_set_con_res_announced(false);
   init = oc_main_init(&handler);
   if (init < 0)
     return init;
-
   while (quit != 1) {
     next_event = oc_main_poll();
     pthread_mutex_lock(&mutex);
@@ -284,7 +279,7 @@ void app_main(void)
 
     initialise_wifi();
 
-    if ( xTaskCreate(&client_main, "client_main", 8192, NULL, 5, NULL) != pdPASS ) {
+    if ( xTaskCreate(&client_main, "client_main", 15*1024, NULL, 5, NULL) != pdPASS ) {
         print_error("task create failed");
     }
 }
