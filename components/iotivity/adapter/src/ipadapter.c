@@ -143,24 +143,36 @@ static int add_mcast_sock_to_ipv4_mcast_group(int mcast_sock,
     int err = 0;
     // Configure source interface
     memset(&imreq, 0, sizeof(struct ip_mreq));
-    imreq.imr_interface.s_addr = IPADDR_ANY;
-    imreq.imr_multiaddr.s_addr = htonl(ALL_COAP_NODES_V4);
+    tcpip_adapter_ip_info_t ip_info = { 0 };
+    err = tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info);
+    if (err != ESP_OK) {
+        print_error("get ip4 ret:%d\n", err);
+    }
 
+    inet_addr_from_ipaddr(&imreq.imr_interface, &ip_info.ip);
+    imreq.imr_multiaddr.s_addr = htonl(ALL_COAP_NODES_V4);
     ESP_LOGI(TAG, "Configured IPV4 Multicast address %s", inet_ntoa(imreq.imr_multiaddr.s_addr));
+
     if (!IP_MULTICAST(ntohl(imreq.imr_multiaddr.s_addr))) {
         print_error("not a valid multicast address");
     }
+
+    err = setsockopt(mcast_sock, IPPROTO_IP, IP_MULTICAST_IF, &imreq.imr_interface, sizeof(struct in_addr));
+    if (err < 0) {
+        print_error("setsockopt IP_MULTICAST_IF ret:%d", err);
+    }
+
 #ifdef OC_LEAVE_GROUP
     err = setsockopt(mcast_sock, IPPROTO_IP, IP_DROP_MEMBERSHIP, &imreq, sizeof(struct ip_mreq));
     if (err < 0) {
         print_error("setsockopt IP_DROP_MEMBERSHIP ret:%d", err);
     }
 #endif
+
     err = setsockopt(mcast_sock, IPPROTO_IP, IP_ADD_MEMBERSHIP,  &imreq, sizeof(struct ip_mreq));
     if (err < 0) {
         print_error("setsockopt IP_ADD_MEMBERSHIP ret:%d", err);
     }
-
   return 0;
 }
 #endif /* OC_IPV4 */
@@ -172,7 +184,7 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock, int interface_inde
     struct ip6_addr if_ipaddr = { 0 };
     err = tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr);
     if (err != ESP_OK) {
-        print_error("get ip6 ret:%d\n", err);
+        print_error("got ip6 addr ret:%d\n", err);
     }
     /* Link-local scope */
     memset(&v6imreq, 0, sizeof(struct ip6_mreq));
@@ -182,7 +194,7 @@ static int add_mcast_sock_to_ipv6_mcast_group(int mcast_sock, int interface_inde
      memcpy(v6imreq.ipv6mr_multiaddr.s6_addr, ALL_OCF_NODES_LL, 16);
      err = setsockopt(mcast_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &v6imreq.ipv6mr_interface, sizeof(struct in6_addr));
      if (err < 0) {
-         print_error("set opt ret:%d\n", err);
+         print_error("setsockopt IPV6_MULTICAST_IF ret:%d\n", err);
      }
 
 #ifdef OC_LEAVE_GROUP
@@ -281,10 +293,12 @@ static void *network_event_thread(void *data) {
   while (dev->terminate != 1) {
     len = sizeof(client);
     setfds = rfds;
-
+#ifdef OC_IPV4
+    int maxfd = (dev->server4_sock > dev->mcast4_sock) ? dev->server4_sock : dev->mcast4_sock;
+#else
     int maxfd = (dev->server_sock > dev->mcast_sock) ? dev->server_sock : dev->mcast_sock;
+#endif
     n = select(maxfd + 1, &setfds, NULL, NULL, NULL);
-
     for (i = 0; i < n; i++) {
       len = sizeof(client);
       oc_message_t *message = oc_allocate_message();
@@ -418,6 +432,7 @@ oc_connectivity_get_endpoints(int device)
     int err = 0;
 #ifdef OC_IPV4
     ep.flags = IPV4;
+    ESP_LOGI(TAG, "IPV4 flag set");
     ep.addr.ipv4.port = OCF_PORT_UNSECURED;
     tcpip_adapter_ip_info_t sta_ip;
     err = tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &sta_ip);
@@ -427,6 +442,7 @@ oc_connectivity_get_endpoints(int device)
     memcpy(ep.addr.ipv4.address, &sta_ip.ip, 4);
 #else   // IPv6
     ep.flags = IPV6;
+    ESP_LOGI(TAG, "IPV6 flag set");
     ep.addr.ipv6.port = OCF_PORT_UNSECURED;
     struct ip6_addr if_ipaddr = { 0 };
     err = tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr);
@@ -509,47 +525,42 @@ void oc_send_buffer(oc_message_t *message) {
   OC_DBG("Sent %d bytes\n", bytes_sent);
 }
 
-//#ifdef OC_CLIENT
-void
-oc_send_discovery_request(oc_message_t *message)
+void oc_send_discovery_request(oc_message_t *message)
 {
   ip_context_t *dev = get_ip_context_for_device(message->endpoint.device);
   struct in6_addr if_inaddr = { 0 };
   struct ip6_addr if_ipaddr = { 0 };
   int err = 0;
-    if (message->endpoint.flags & IPV6) {
-        err = tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr);
-        inet6_addr_from_ip6addr(&if_inaddr, &if_ipaddr);
-        if (err != ESP_OK) {
-            print_error("tcpip_adapter_get_ip6_linklocal ret:%d\n", err);
-        }
-        // Assign the multicast source interface, via its IP
-        err = setsockopt(dev->server_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &if_inaddr, sizeof(struct in6_addr));
-        if (err < 0) {
-            print_error("set opt ret:%d\n", err);
-        }
-        oc_send_buffer(message);
-      } else if (message->endpoint.flags & IPV4) {
-          tcpip_adapter_ip_info_t ip_info = { 0 };
-          struct in_addr iaddr = { 0 };
-          err = tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info);
-          if (err != ESP_OK) {
-              print_error("get ip ret:%d\n", err);
-          }
-          inet_addr_from_ipaddr(&iaddr, &ip_info.ip);
-#ifdef OC_IPV4
-          // Assign the IPv4 multicast source interface, via its IP
-          // (only necessary if this socket is IPV4 only)
-          err = setsockopt(dev->server4_sock, IPPROTO_IP, IP_MULTICAST_IF, &iaddr, sizeof(struct in_addr));
-          if (err < 0) {
-              print_error("set opt ret:%d\n", err);
-          }
-          oc_send_buffer(message);
-#endif
+#ifndef OC_IPV4
+    err = tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr);
+    inet6_addr_from_ip6addr(&if_inaddr, &if_ipaddr);
+    if (err != ESP_OK) {
+        print_error("tcpip_adapter_get_ip6_linklocal ret:%d\n", err);
     }
+    // Assign the multicast source interface, via its IP
+    err = setsockopt(dev->server_sock, IPPROTO_IPV6, IPV6_MULTICAST_IF, &if_inaddr, sizeof(struct in6_addr));
+    if (err < 0) {
+        print_error("set opt ret:%d\n", err);
+    }
+    oc_send_buffer(message);
+#else
+  tcpip_adapter_ip_info_t ip_info = { 0 };
+  struct in_addr iaddr = { 0 };
+  err = tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info);
+  if (err != ESP_OK) {
+      print_error("get ip ret:%d\n", err);
+  }
+  inet_addr_from_ipaddr(&iaddr, &ip_info.ip);
 
+  // Assign the IPv4 multicast source interface, via its IP
+  // (only necessary if this socket is IPV4 only)
+  err = setsockopt(dev->server4_sock, IPPROTO_IP, IP_MULTICAST_IF, &iaddr, sizeof(struct in_addr));
+  if (err < 0) {
+      print_error("set opt ret:%d\n", err);
+  }
+  oc_send_buffer(message);
+#endif
 }
-//#endif /* OC_CLIENT */
 
 #ifdef OC_IPV4
 static int
@@ -566,7 +577,14 @@ connectivity_ipv4_init(ip_context_t *dev)
 
   struct sockaddr_in *l = (struct sockaddr_in *)&dev->server4;
   l->sin_family = AF_INET;
-  l->sin_addr.s_addr = INADDR_ANY;
+//  l->sin_addr.s_addr = INADDR_ANY;
+  int err = 0;
+  tcpip_adapter_ip_info_t ip_info = { 0 };
+  err = tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip_info);
+  if (err != ESP_OK) {
+      print_error("get ip4 ret:%d\n", err);
+  }
+  inet_addr_from_ipaddr(&l->sin_addr, &ip_info.ip);
   l->sin_port = 0;
 
 #ifdef OC_SECURITY
@@ -664,7 +682,7 @@ int oc_connectivity_init(int device) {
   ip_context_t *dev = &devices[device];
 #endif /* !OC_DYNAMIC_ALLOCATION */
   dev->device = device;
-
+#ifndef OC_IPV4
   memset(&dev->mcast, 0, sizeof(struct sockaddr_storage));
   memset(&dev->server, 0, sizeof(struct sockaddr_storage));
 
@@ -682,8 +700,8 @@ int oc_connectivity_init(int device) {
   if (err != ESP_OK) {
       print_error("get ip6 ret:%d\n", err);
   }
-  printf("set interface: " IPV6STR "\n", IPV62STR(if_ipaddr));
   inet6_addr_from_ip6addr(&l->sin6_addr, &if_ipaddr);
+
   l->sin6_port = 0;
 
 #ifdef OC_SECURITY
@@ -769,6 +787,7 @@ int oc_connectivity_init(int device) {
 
   dev->dtls_port = ntohs(sm->sin6_port);
 #endif /* OC_SECURITY */
+#endif
 
 #ifdef OC_IPV4
   if (connectivity_ipv4_init(dev) != 0) {
