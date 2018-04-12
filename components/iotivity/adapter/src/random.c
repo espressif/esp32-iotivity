@@ -13,25 +13,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 */
-
 #include "port/oc_random.h"
 #include "esp_system.h"
 
-// function declaration is under iotivity-constrained/port/oc_random.h
-
-void oc_random_init(void)
+void
+oc_random_init(void)
 {
-    //urandom_fd = open("/dev/urandom", O_RDONLY);
+  //urandom_fd = open("/dev/urandom", O_RDONLY);
 }
 
-unsigned int oc_random_value(void)
+unsigned int
+oc_random_value(void)
 {
     unsigned int rand = 0;
     rand = (unsigned int)esp_random();
     return rand;
 }
 
-void oc_random_destroy(void)
+void
+oc_random_destroy(void)
 {
-    //close(urandom_fd);
+  //close(urandom_fd);
 }

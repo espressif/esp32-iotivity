@@ -36,6 +36,7 @@ void print_macro_info();
  * */
 void print_message_info(oc_message_t *message);
 
+
 /**
  * @brief  print the data detail information
  *
@@ -44,11 +45,28 @@ void print_message_info(oc_message_t *message);
  * @param[in]  data: input data pointer to print
  * @param[in]  len: data length
  * @param[in]  note: notes for read easily
+ * @param[in]  mode: 0x00, 0x01, 0x10, 0x11 to decide the BINARY_SHOW && BYTES_SHOW
  *
  * @return noreturn
  *
  */
-void print_debug(const char* data, const unsigned int len, const char* note);
+void print_debug(const char* data, const unsigned int len, const char* note, int mode);
+
+
+/**
+ * @brief  print the fatal error information and cycle it
+ *
+ *  usage: same to printf
+ *
+ * @return noreturn
+ * */
+#define print_error(fmt, args...)  \
+    do { \
+        printf("[error]:");\
+        printf(fmt, ##args); \
+        printf(",heap size:%d%s", system_get_free_heap_size(), "\r\n"); \
+        vTaskDelay(2000 / portTICK_RATE_MS);    \
+    } while(1)
 
 #if APP_DEBUG
 

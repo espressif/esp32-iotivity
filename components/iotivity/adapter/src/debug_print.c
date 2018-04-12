@@ -56,6 +56,12 @@ void print_macro_info()
     printf("OC_DYNAMIC_ALLOCATION not defined!\n");
 #endif
 
+#ifdef OC_BLOCK_WISE
+    printf("OC_BLOCK_WISE defined!\n");
+#else
+    printf("OC_BLOCK_WISE not defined!\n");
+#endif
+
     printf("\n****************************************\n");
 }
 
@@ -97,37 +103,34 @@ void print_message_info(oc_message_t *message)
  * @param[in]  data: input data pointer to print
  * @param[in]  len: data length
  * @param[in]  note: notes for read easily
+ * @param[in]  mode: 0x00, 0x01, 0x10, 0x11 to decide the BINARY_SHOW && BYTES_SHOW
  *
  * @return noreturn
  *
  */
-void print_debug(const char* data, const unsigned int len, const char* note)
+void print_debug(const char* data, const unsigned int len, const char* note, int mode)
 {
-#define COUNT_BYTE_AND_NEW_LINE 1   // 1: count data bytes && print new line every 32 bytes, 0: ignore
-#define ALL_BINARY_SHOW 0           // 1: print all data in ASCII, 0: print ASCII if control or invisible character, otherwise print in char
-    printf("\n********** %s [len:%d] start addr:%p **********\n", note, len, data);
+#define BINARY_SHOW 0x10
+#define BYTES_SHOW  0x01
+    printf("\n********** %s [len:%u] start addr:%p **********\n", note, len, data);
     int i = 0;
-    for (i = 0; i < len; ++i){
-#if !(ALL_BINARY_SHOW)
-    if(data[i] < 33 || data[i] > 126)
-     {
-        if(i > 0 && (data[i-1] >= 33 && data[i-1] <= 126) )
-                printf(" ");
-        printf("%02x ",data[i]);
-     }else{
-        printf("%c", data[i]);
-     }
-#else
-        printf("%02x ",data[i]);
-#endif
+    for (i = 0; i < len; ++i) {
+        if (BINARY_SHOW & mode) {
+            printf("%02x ",data[i]);
+        } else {
+            if(data[i] < 32 || data[i] > 126) { // control || invisible charset
+                if(i > 0 && (data[i-1] >= 33 && data[i-1] <= 126) )
+                        printf(" ");
+                printf("%02x ",data[i]);
+             } else {
+                printf("%c", data[i]);
+             }
+        }
 
-#if COUNT_BYTE_AND_NEW_LINE
-   if ((i + 1) % 32 == 0){
-        printf("    | %d Bytes\n",i + 1);
-    }
-#endif
+        if ((BYTES_SHOW & mode) && ((i + 1) % 32 == 0)) {
+                printf("    | %d Bytes\n",i + 1);
+        }
+    }   // end for
+
+    printf("\n---------- %s End ----------\n", note);
 }
-
-printf("\n---------- %s End ----------\n", note);
-}
-

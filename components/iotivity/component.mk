@@ -22,9 +22,7 @@ adapter/src/storage.o	\
 adapter/src/clock.o		\
 adapter/src/ipadapter.o	\
 adapter/src/abort.o		\
-adapter/src/exception_handling.o	\
 adapter/src/debug_print.o	\
-adapter/src/freertos_mutex.o	\
 \
 iotivity-constrained/util/oc_etimer.o \
 iotivity-constrained/util/oc_list.o \
@@ -40,7 +38,9 @@ iotivity-constrained/api/oc_client_api.o \
 iotivity-constrained/api/oc_collection.o \
 iotivity-constrained/api/oc_core_res.o \
 iotivity-constrained/api/oc_discovery.o \
+iotivity-constrained/api/oc_endpoint.o \
 iotivity-constrained/api/oc_helpers.o \
+iotivity-constrained/api/oc_introspection.o \
 iotivity-constrained/api/oc_main.o \
 iotivity-constrained/api/oc_network_events.o \
 iotivity-constrained/api/oc_rep.o \
