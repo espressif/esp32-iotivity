@@ -14,18 +14,40 @@
 // limitations under the License.
 */
 
-#include "oc_api.h"
-#include "port/oc_clock.h"
-
 #include <pthread.h>
-#include <signal.h>
 #include <stdio.h>
 
-static pthread_mutex_t mutex;
-static pthread_cond_t cv;
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+#include "freertos/task.h"
+#include "freertos/event_groups.h"
+
+#include "nvs.h"
+#include "nvs_flash.h"
+#include "esp_wifi.h"
+#include "esp_event_loop.h"
+#include "esp_log.h"
+
+#include "oc_api.h"
+#include "port/oc_clock.h"
+#include "lightbulb.h"
+#include "debug_print.h"
+
+#define EXAMPLE_WIFI_SSID CONFIG_WIFI_SSID
+#define EXAMPLE_WIFI_PASS CONFIG_WIFI_PASSWORD
+
+static EventGroupHandle_t wifi_event_group;
+
+static const int IPV4_CONNECTED_BIT = BIT0;
+static const int IPV6_CONNECTED_BIT = BIT1;
+
+static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cv = PTHREAD_COND_INITIALIZER;
 static struct timespec ts;
 static int quit = 0;
 static bool light_state = false;
+
+static const char *TAG = "iotivity server";
 
 static void
 set_device_custom_property(void *data)
@@ -79,6 +101,14 @@ post_light(oc_request_t *request, oc_interface_mask_t interface, void *user_data
       state = rep->value.boolean;
       PRINT("value: %d\n", state);
       break;
+    case OC_REP_INT:
+        PRINT("value: %d\n", rep->value.integer);
+        // process light info...
+        notify_lightbulb_state(rep->value.integer, 0);
+        vTaskDelay(50);     // keep light state ticks
+        break;
+
+    // case ...
     default:
       oc_send_response(request, OC_STATUS_BAD_REQUEST);
       return;
@@ -128,15 +158,90 @@ handle_signal(int signal)
   quit = 1;
 }
 
-int
-main(void)
+static esp_err_t event_handler(void *ctx, system_event_t *event)
+{
+    switch (event->event_id) {
+    case SYSTEM_EVENT_STA_START:
+        esp_wifi_connect();
+        break;
+
+    case SYSTEM_EVENT_STA_GOT_IP:
+        xEventGroupSetBits(wifi_event_group, IPV4_CONNECTED_BIT);
+        break;
+
+    case SYSTEM_EVENT_STA_DISCONNECTED:
+        /* This is a workaround as ESP32 WiFi libs don't currently
+           auto-reassociate. */
+        esp_wifi_connect();
+        xEventGroupClearBits(wifi_event_group, IPV4_CONNECTED_BIT);
+#ifndef OC_IPV4
+        xEventGroupClearBits(wifi_event_group, IPV6_CONNECTED_BIT);
+#endif
+        break;
+
+    case SYSTEM_EVENT_STA_CONNECTED:
+#ifndef OC_IPV4
+        tcpip_adapter_create_ip6_linklocal(TCPIP_ADAPTER_IF_STA);
+#endif
+        break;
+
+    case SYSTEM_EVENT_AP_STA_GOT_IP6:
+        xEventGroupSetBits(wifi_event_group, IPV6_CONNECTED_BIT);
+        break;
+
+    default:
+        break;
+    }
+
+    return ESP_OK;
+}
+
+static void initialise_wifi(void)
+{
+    tcpip_adapter_init();
+    wifi_event_group = xEventGroupCreate();
+    ESP_ERROR_CHECK(esp_event_loop_init(event_handler, NULL));
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = EXAMPLE_WIFI_SSID,
+            .password = EXAMPLE_WIFI_PASS,
+        },
+    };
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+}
+
+static int server_main(void* pvParameter)
 {
   int init;
-  struct sigaction sa;
-  sigfillset(&sa.sa_mask);
-  sa.sa_flags = 0;
-  sa.sa_handler = handle_signal;
-  sigaction(SIGINT, &sa, NULL);
+  tcpip_adapter_ip_info_t ip4_info = { 0 };
+  struct ip6_addr if_ipaddr_ip6 = { 0 };
+  ESP_LOGI(TAG, "iotivity server task started");
+  // wait to fetch IPv4 && ipv6 address
+#ifdef OC_IPV4
+  xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT, false, true, portMAX_DELAY);
+#else
+  xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT | IPV6_CONNECTED_BIT, false, true, portMAX_DELAY);
+#endif
+
+  if ( tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip4_info) != ESP_OK) {
+      print_error("get IPv4 address failed");
+  } else {
+      ESP_LOGI(TAG, "got IPv4 addr:%s", ip4addr_ntoa(&(ip4_info.ip)));
+  }
+
+#ifndef OC_IPV4
+  if ( tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr_ip6) != ESP_OK) {
+      print_error("get IPv6 address failed");
+  } else {
+      ESP_LOGI(TAG, "got IPv6 addr:%s", ip6addr_ntoa(&if_ipaddr_ip6));
+  }
+#endif
 
   static const oc_handler_t handler = {.init = app_init,
                                        .signal_event_loop = signal_event_loop,
@@ -168,3 +273,26 @@ main(void)
   oc_main_shutdown();
   return 0;
 }
+
+
+void app_main(void)
+{
+    if (nvs_flash_init() != ESP_OK){
+        print_error("nvs_flash_init failed");
+    }
+
+    pthread_cond_init(&cv, NULL);
+
+    print_macro_info();
+
+    initialise_wifi();
+
+    if ( xTaskCreate(&server_main, "server_main", 15*1024, NULL, 5, NULL) != pdPASS ) {
+        print_error("task create failed");
+    }
+
+    if ( xTaskCreate(&lightbulb_damon_task, "lightbulb_damon_task", 8192, NULL, 5, NULL) != pdPASS ) {
+        print_error("task create failed");
+    }
+}
+
