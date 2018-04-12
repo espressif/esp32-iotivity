@@ -1,4 +1,4 @@
-# a IoTivity demo that works on ESP32
+# An IoTivity Demo that Works on ESP32
 # Table of Contents
 - [Introduction](#Introduction)
 - [Part 1: Prerequisites](#prerequisites)
