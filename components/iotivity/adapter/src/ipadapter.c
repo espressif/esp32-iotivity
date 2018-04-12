@@ -432,7 +432,6 @@ oc_connectivity_get_endpoints(int device)
     int err = 0;
 #ifdef OC_IPV4
     ep.flags = IPV4;
-    ESP_LOGI(TAG, "IPV4 flag set");
     ep.addr.ipv4.port = OCF_PORT_UNSECURED;
     tcpip_adapter_ip_info_t sta_ip;
     err = tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &sta_ip);
@@ -442,7 +441,6 @@ oc_connectivity_get_endpoints(int device)
     memcpy(ep.addr.ipv4.address, &sta_ip.ip, 4);
 #else   // IPv6
     ep.flags = IPV6;
-    ESP_LOGI(TAG, "IPV6 flag set");
     ep.addr.ipv6.port = OCF_PORT_UNSECURED;
     struct ip6_addr if_ipaddr = { 0 };
     err = tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr);
