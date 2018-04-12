@@ -97,10 +97,24 @@ observe_light(oc_client_response_t *data)
     }
     rep = rep->next;
   }
+
+  // prepare send data to server
+  int r_value = BULB_STATE_RED;
+  int g_value = BULB_STATE_GREEN;
+  int b_value = BULB_STATE_BLUE;
+  int w_value = BULB_STATE_OTHERS;
+
   if (oc_init_post(light_1, light_server, NULL, &post_light, LOW_QOS, NULL)) {
     oc_rep_start_root_object();
+
     oc_rep_set_boolean(root, state, !light_state);
+    oc_rep_set_int(root, r_value, r_value);
+    oc_rep_set_int(root, g_value, g_value);
+    oc_rep_set_int(root, b_value, b_value);
+    oc_rep_set_int(root, w_value, w_value);
+    // set more param to struct linklist
     oc_rep_end_root_object();
+
     if (oc_do_post())
       PRINT("Sent POST request\n");
     else
@@ -167,17 +181,31 @@ handle_signal(int signal)
   quit = 1;
 }
 
-int
-client_main(void)
+static int client_main(void)
 {
     int init;
+    tcpip_adapter_ip_info_t ip4_info = { 0 };
+    struct ip6_addr if_ipaddr_ip6 = { 0 };
+    ESP_LOGI(TAG, "iotivity client task started");
     // wait to fetch IPv4 && ipv6 address
 #ifdef OC_IPV4
     xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT, false, true, portMAX_DELAY);
-    ESP_LOGI(TAG, "iotivity client task started, had got IPV4 address");
 #else
     xEventGroupWaitBits(wifi_event_group, IPV4_CONNECTED_BIT | IPV6_CONNECTED_BIT, false, true, portMAX_DELAY);
-    ESP_LOGI(TAG, "iotivity client task started, had got IPV4 && IPv6 address");
+#endif
+
+    if ( tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ip4_info) != ESP_OK) {
+        print_error("get IPv4 address failed");
+    } else {
+        ESP_LOGI(TAG, "got IPv4 addr:%s", ip4addr_ntoa(&(ip4_info.ip)));
+    }
+
+#ifndef OC_IPV4
+    if ( tcpip_adapter_get_ip6_linklocal(TCPIP_ADAPTER_IF_STA, &if_ipaddr_ip6) != ESP_OK) {
+        print_error("get IPv6 address failed");
+    } else {
+        ESP_LOGI(TAG, "got IPv6 addr:%s", ip6addr_ntoa(&if_ipaddr_ip6));
+    }
 #endif
 
   static const oc_handler_t handler = {.init = app_init,
