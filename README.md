@@ -1,5 +1,4 @@
 # Overview
--------------
 IoTivity is an open source software framework enabling seamless device-to-device connectivity to address the emerging needs of the Internet of Things,for more details, click https://www.iotivity.org  
 
 The demo is the detailed implement of IoTivity based on [IoTivity-constrained](https://github.com/iotivity/iotivity-constrained). User can run different features on ESP32 via `make menuconfig`.
@@ -13,7 +12,6 @@ The demo is the detailed implement of IoTivity based on [IoTivity-constrained](h
 - support interact with other IoTvity device
 
 # Hardware Introduction
----------------
 The ESP32 Board control RGB light by the following configuration.  
 
 |ESP32 GPIO | RGB light |
@@ -48,7 +46,7 @@ git submodule update --init --recursive
 
 6. reconfigure client environment by `make clean && make defconfig && make menuconfig`.
 
-7. `make CLIENT=1 flash monitor` to compile & flashing & running the client
+7. `make CLIENT=1 flash monitor` to compile & flashing & running the client.
 
-More details are in the [esp-idf README](https://github.com/espressif/esp-idf/blob/master/README.md)
+More details are in the [esp-idf README](https://github.com/espressif/esp-idf/blob/master/README.md).
 
