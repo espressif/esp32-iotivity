@@ -37,6 +37,11 @@ config APP_DEBUG
     help
         enable or disable application debug
 
+config ENABLE_LIGHT
+    bool "ENABLE_LIGHT"
+    help
+        enable or disable light
+
 config DYNAMIC
     bool "DYNAMIC"
     help

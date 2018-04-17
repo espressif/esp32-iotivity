@@ -108,10 +108,12 @@ observe_light(oc_client_response_t *data)
     oc_rep_start_root_object();
 
     oc_rep_set_boolean(root, state, !light_state);
+#ifdef ENABLE_LIGHT
     oc_rep_set_int(root, r_value, r_value);
     oc_rep_set_int(root, g_value, g_value);
     oc_rep_set_int(root, b_value, b_value);
     oc_rep_set_int(root, w_value, w_value);
+#endif
     // set more param to struct linklist
     oc_rep_end_root_object();
 

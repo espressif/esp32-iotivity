@@ -44,6 +44,12 @@ void print_macro_info()
     printf("OC_IPV4 not defined!\n");
 #endif
 
+#ifdef ENABLE_LIGHT
+    printf("ENABLE_LIGHT defined!\n");
+#else
+    printf("ENABLE_LIGHT not defined!\n");
+#endif
+
 #ifdef OC_SECURITY
     printf("OC_SECURITY defined!\n");
 #else

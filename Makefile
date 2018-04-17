@@ -6,11 +6,15 @@
 export PROJECT_PATH := $(PWD)
 export IDF_PATH ?= $(PWD)/esp-idf
 
-ifeq ($(SERVER), 1)
-	PROJECT_NAME := iotivity_server
-else
+ifeq ($(CLIENT), 1)
 	PROJECT_NAME := iotivity_client
 endif
+	
+ifeq ($(SERVER), 1)
+	PROJECT_NAME := iotivity_server
+endif
+
+PROJECT_NAME ?= esp32_iotivity
 
 include $(IDF_PATH)/make/project.mk
 
@@ -21,7 +25,7 @@ ifdef CONFIG_IOTIVITY_CLIENT
 endif
 
 ifdef CONFIG_IOTIVITY_SERVER
-   CFLAGS += -DOC_SERVER
+    CFLAGS += -DOC_SERVER
 endif
 
 ifdef CONFIG_OC_DEBUG
@@ -30,6 +34,10 @@ endif
 
 ifdef CONFIG_APP_DEBUG
     CFLAGS += -DAPP_DEBUG
+endif
+
+ifdef CONFIG_ENABLE_LIGHT
+    CFLAGS += -DENABLE_LIGHT
 endif
 
 ifdef CONFIG_DYNAMIC
