@@ -1,0 +1,5 @@
+# Default sdkconfig parameters to use the IoTivity
+CONFIG_IOTIVITY_SERVER=y
+CONFIG_ENABLE_LIGHT=y
+CONFIG_OC_DEBUG=y
+CONFIG_IPV4=n
