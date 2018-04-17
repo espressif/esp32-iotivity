@@ -1,97 +1,53 @@
-# An IoTivity Demo that Works on ESP32
-# Table of Contents
-- [Introduction](#Introduction)
-- [Part 1: Prerequisites](#prerequisites)
-- [Part 2: SDK and Tools Preparation](#tools_prepare)
-- [Part 3: Configuring and building](#config_build)
-- [Part 4: Result shows](#results)
-- [TroubleShoot](#troubleshoot)
+# Overview
+-------------
+IoTivity is an open source software framework enabling seamless device-to-device connectivity to address the emerging needs of the Internet of Things,for more details, click https://www.iotivity.org  
 
-<span id = "Introduction">Introduction</span>
- ------------------------------
-###### ESP32 is one of gorgeous ioT device that can interface with other systems to provide Wi-Fi and Bluetooth functionality through the SPI / SDIO or I2C / UART interfaces.for more details, click https://espressif.com/en/products/hardware/esp32/overview  
+The demo is the detailed implement of IoTivity based on [IoTivity-constrained](https://github.com/iotivity/iotivity-constrained). User can run different features on ESP32 via `make menuconfig`.
 
-###### IoTivity is an open source software framework enabling seamless device-to-device connectivity to address the emerging needs of the Internet of Things,for more details, click https://www.iotivity.org  
-**Aim:**
-##### This page would guide you to make your ESP32 works under the IoTivity framework.There would be two ESP32 chips,one as the OIC client and the other as the OIC server.Firstly, we would config our Host PC and flash code to each of chips.Secondly,both of them would connect to the same AP(WIFI),and then would transmit messages to each other by IoTivity framework.the iotivity framework on ESP32 came from git repository:https://github.com/iotivity/iotivity-constrained  
-main workflow depicts as following:
-![IoTivityESP32workflow](https://github.com/ustccw/RepoForShareData/blob/master/OCF/Photos/IoTivityESP32Workflow.png)
+**Features List:**  
+- support IPv4 OIC server
+- support IPv4 OIC client
+- support IPv6 OIC server
+- support IPv6 OIC client
+- support RGB light control
+- support interact with other IoTvity device
 
-<span id = "prerequisites">Part 1: Prerequisites</span>
- ------------------------------
-- **ubuntu environment** for building your demo.
-- **two ESP32 devices** for running the OIC client and the OIC server.  
-![ESP32 device](https://github.com/ustccw/RepoForShareData/blob/master/Microsoft/AzureData/Photos/ESP32-DevKitC.png)
+# Hardware Introduction
+---------------
+The ESP32 Board control RGB light by the following configuration.  
+|ESP32 GPIO | RGB light|
+|:---:|:---:|
+|GPIO4|R|
+|GPIO5|G|
+|GPIO21|B|
+|GND|GND|
 
-<span id = "tools_prepare">Part 2: SDK and Tools Preparation</span>
- ------------------------------
-#### 2.1 **SDK get**
- you could get IoTivityESP32-SDK from https://github.com/ustccw/IoTivityESP32.  
- IoTivityESP32-SDK could make your ESP32(or Device with ESP32) work under the IoTivity framework.  
- you could get IDF-SDK from https://github.com/espressif/esp-idf.  
- IDF-SDK could make ESP32 get started and work well.  
-	**Important:** there would be some submodules in SDK and **submodule of SDK**,please run **'git submodule init'** and **'git submodule update'** firstly.
+user can change GPIO in `lightbulb.c` if needed.
 
-#### 2.2 **Compiler get**  
- follow the guide: http://esp-idf.readthedocs.io/en/latest/get-started/linux-setup.html  
- xtensa-esp32-elf compiler could build ESP32 code and flash code to the chip.  
+# Compiling and flashing the project
+Compiling the esp32-iotivity is the same as compiling any other project based on the ESP-IDF:
 
-<span id = "config_build">Part 3: Configuring and building</span>
-------------------------------
-### 3.1 config you ESP32 server 
+1. You can clone the total project into an empty directory by using command:
 ```
-$make menuconfig
+git clone https://github.com/espressif/esp32-iotivity.git
+cd esp32-iotivity
+git submodule update --init --recursive
 ```
-> * config your Default serial port
-> * config your Default baud rate
-> * config your WiFi SSID and WiFi Password
-> * choose your iotivity mode(iotivity server)
-> * enable your SO_REUSEADDR option
+- make sure that you had cloned all the submodules. The esp32-iotivity project has the `ESP-IDF` and `iotivity-constrained` as the submodule.
 
-### 3.2 build your OIC server and flash code to ESP32
-```
-$make flash
-```
-if failed,try:
- - make sure that ESP32 had connect to PC by serial port 
- - make sure you flash to correct serial port
- - try type command:
-   > sudo usermod -a -G dialout $USER
+2. Set the latest default configuration by `make defconfig`.
 
-### 3.3 clean your workspace for OIC client
-```
-$make clean	
-```
-you should run **'make clean'** before every **'make menuconfig'** and **'make flash'**.
+3. `make menuconfig` to config your serial port, WiFi ssid and password, IPv4 or IPv6, iotivity server or iotivity client, enable light control or disable light control, and enable or disable debug log. 
 
-### 3.4 build your ESP32 client
-```
-$make menuconfig
-```
-> * config your Default serial port
-> * config your Default baud rate
-> * config your WiFi SSID and WiFi Password
-> * choose your iotivity mode(iotivity client)
-> * enable your SO_REUSEADDR option
+- make sure that your router can support IPv4 multicast and IPv6 multicast.
 
-### 3.5 build your OIC client and flash to ESP32
-```
-$make flash
-```
+4. choose two ESP32 board, one as iotivity server, the other as iotivity client, server board connect to the RGB light by `Hardware Introduction`.
 
-<span id = "results">Part 4: Result shows</span>
- ------------------------------
- - restart your ESP32 server(OIC server)
- - restart your ESP32 client(OIC client)
- - you would see that light state is changing between esp32 client and esp32 server.
+5. `make SERVER=1 flash monitor` to compile & flashing & running the server.
 
- <span id = "troubleshoot">TroubleShoot</span>
- ------------------------------
- - close some firewall settings
- - build failed,try:
-   - git submodule init
-   - git submodule update
-   - export your compiler path 
-   - export your SDK path
-   - get start with http://espressif.com/en/support/download/documents?keys=&field_type_tid%5B%5D=13
- - make sure you could run hello_world demo on ESP32
+6. reconfigure client environment by `make clean && make defconfig && make menuconfig`.
+
+7. `make CLIENT=1 flash monitor` to compile & flashing & running the client
+
+More details are in the [esp-idf README](https://github.com/espressif/esp-idf/blob/master/README.md)
+
