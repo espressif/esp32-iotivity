@@ -15,12 +15,13 @@ The demo is the detailed implement of IoTivity based on [IoTivity-constrained](h
 # Hardware Introduction
 ---------------
 The ESP32 Board control RGB light by the following configuration.  
-|ESP32 GPIO | RGB light|
-|:---:|:---:|
-|GPIO4|R|
-|GPIO5|G|
-|GPIO21|B|
-|GND|GND|
+
+|ESP32 GPIO | RGB light |
+|   :---:   |  :---:    |
+|   GPIO4   |     R     |
+|   GPIO5   |     G     |
+|   GPIO21  |     B     |
+|   GND     |     GND   |
 
 user can change GPIO in `lightbulb.c` if needed.
 
@@ -33,13 +34,13 @@ git clone https://github.com/espressif/esp32-iotivity.git
 cd esp32-iotivity
 git submodule update --init --recursive
 ```
-- make sure that you had cloned all the submodules. The esp32-iotivity project has the `ESP-IDF` and `iotivity-constrained` as the submodule.
+ - make sure that you had cloned all the submodules. The esp32-iotivity project has the `ESP-IDF` and `iotivity-constrained` as the submodule.
 
 2. Set the latest default configuration by `make defconfig`.
 
 3. `make menuconfig` to config your serial port, WiFi ssid and password, IPv4 or IPv6, iotivity server or iotivity client, enable light control or disable light control, and enable or disable debug log. 
 
-- make sure that your router can support IPv4 multicast and IPv6 multicast.
+ - make sure that your router can support IPv4 multicast and IPv6 multicast.
 
 4. choose two ESP32 board, one as iotivity server, the other as iotivity client, server board connect to the RGB light by `Hardware Introduction`.
 
